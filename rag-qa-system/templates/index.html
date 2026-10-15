@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG 教务知识问答系统</title>
+  <script src="https://unpkg.com/vue@3.4.21/dist/vue.global.prod.js"></script>
+  <script src="https://unpkg.com/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    :root {
+      --bg: #eafaf3;
+      --card: rgba(255,255,255,0.78);
+      --green-soft: rgba(120,220,160,0.18);
+      --green-fresh: #2bb673;
+      --green-deep: #128c5e;
+      --text: #1f3d2e;
+      --muted: #5d7d6c;
+      --border: rgba(43,182,115,0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+      background: linear-gradient(135deg, #eafaf3 0%, #d9f5e8 60%, #eaf7ff 100%);
+      color: var(--text); min-height: 100vh;
+    }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 60px; }
+    header {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px 28px; margin-bottom: 22px;
+      backdrop-filter: blur(6px);
+    }
+    header h1 { margin: 0 0 6px; font-size: 26px; color: var(--green-deep); }
+    header .sub { color: var(--muted); font-size: 14px; line-height: 1.7; }
+    .badge {
+      display: inline-block; background: var(--green-soft); color: var(--green-deep);
+      border: 1px solid var(--border); border-radius: 999px; padding: 2px 12px;
+      font-size: 12px; margin-right: 8px;
+    }
+    .grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 22px; }
+    @media (max-width: 920px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 22px 24px; backdrop-filter: blur(6px);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 18px; color: var(--green-deep);
+      border-left: 4px solid var(--green-fresh); padding-left: 10px; }
+    .ask-box textarea {
+      width: 100%; min-height: 96px; resize: vertical; border: 1px solid var(--border);
+      border-radius: 10px; padding: 12px 14px; font-size: 15px; font-family: inherit;
+      background: rgba(255,255,255,0.9); color: var(--text); outline: none;
+    }
+    .ask-box textarea:focus { border-color: var(--green-fresh); box-shadow: 0 0 0 3px var(--green-soft); }
+    .row { display: flex; align-items: center; gap: 14px; margin: 12px 0 16px; flex-wrap: wrap; }
+    .row label { font-size: 14px; color: var(--muted); display:flex; align-items:center; gap:6px; cursor:pointer;}
+    .btn {
+      background: linear-gradient(135deg, var(--green-fresh), var(--green-deep));
+      color: #fff; border: none; border-radius: 10px; padding: 11px 26px;
+      font-size: 15px; cursor: pointer; font-weight: 600; transition: transform .15s;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn.ghost { background: #fff; color: var(--green-deep); border: 1px solid var(--border); }
+    .chip { font-size: 13px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+      background: #fff; border: 1px solid var(--border); color: var(--green-deep); }
+    .chip:hover { background: var(--green-soft); }
+    .answer {
+      background: rgba(255,255,255,0.92); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px 18px; margin-top: 14px;
+      white-space: pre-wrap; line-height: 1.85; font-size: 15px;
+      max-height: 420px; overflow-y: auto;
+    }
+    .meta-line { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    .src {
+      margin-top: 14px; border-top: 1px dashed var(--border); padding-top: 12px;
+    }
+    .src h3 { margin: 0 0 10px; font-size: 14px; color: var(--green-deep); }
+    .src-item {
+      background: rgba(255,255,255,0.7); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 13px;
+      line-height: 1.6;
+    }
+    .src-item b { color: var(--green-deep); }
+    .src-item .score { float: right; color: var(--green-fresh); font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+    th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: center; }
+    th { background: var(--green-soft); color: var(--green-deep); font-weight: 600; }
+    td.q { text-align: left; }
+    .pill { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; }
+    .pill.ok { background: var(--green-soft); color: var(--green-deep); }
+    .pill.no { background: rgba(255,180,180,0.35); color:#c0392b; }
+    .chart { width: 100%; height: 320px; }
+    .kb-list { max-height: 320px; overflow-y: auto; }
+    .kb-item { padding: 8px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+    .kb-item b { color: var(--green-deep); }
+    .loading { color: var(--green-fresh); font-size: 14px; }
+    .err { color:#c0392b; font-size:14px; }
+    footer { text-align:center; color: var(--muted); font-size: 12px; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div id="app" class="wrap">
+    <header>
+      <h1>检索增强生成（RAG）教务知识问答系统</h1>
+      <div class="sub">
+        <span class="badge">LangChain + ChromaDB</span>
+        <span class="badge">本地多语言向量</span>
+        <span class="badge">稠密检索 + 交叉编码器重排</span>
+        <span class="badge">国产大模型 API</span>
+        <p style="margin:8px 0 0">
+          系统以高校教务规定为知识源，演示"检索→重排→生成→溯源"的完整 RAG 流程，
+          并提供检索命中率、答案忠实度、回答相关性等多维评估。
+        </p>
+      </div>
+    </header>
+
+    <div class="grid">
+      <!-- 左：问答 -->
+      <div class="card ask-box">
+        <h2>智能问答</h2>
+        <textarea v-model="question" placeholder="请输入教务相关问题，例如：转专业一般在什么时候？"></textarea>
+        <div class="row">
+          <label><input type="checkbox" v-model="rerank" /> 启用交叉编码器重排</label>
+          <button class="btn" @click="doAsk" :disabled="loading">{{ loading ? '查询中…' : '提问' }}</button>
+          <button class="btn ghost" @click="runEval">运行评估</button>
+          <button class="btn ghost" @click="loadKb" v-if="!kb.length">加载知识库</button>
+        </div>
+        <div>
+          <span class="chip" v-for="s in samples" :key="s" @click="question=s; doAsk()">{{ s }}</span>
+        </div>
+
+        <div v-if="error" class="err">{{ error }}</div>
+        <div v-if="answer" class="answer">{{ answer }}</div>
+        <div v-if="answer" class="meta-line">
+          后端: <b>{{ backend }}</b> · 耗时 {{ latency }} ms · 引用来源 {{ sourceIds.length }} 篇
+        </div>
+
+        <div v-if="retrieved.length" class="src">
+          <h3>检索溯源（RAG 可解释性）</h3>
+          <div class="src-item" v-for="(c,i) in retrieved" :key="i">
+            <span class="score">相关度 {{ (c.score*100).toFixed(1) }}%</span>
+            <b>[{{ i+1 }}] {{ c.metadata.title }}（{{ c.metadata.doc_id }}）</b><br/>
+            {{ c.text }}
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：评估与知识库 -->
+      <div>
+        <div class="card">
+          <h2>评估指标对比</h2>
+          <div v-if="!evalData" style="color:var(--muted);font-size:13px;">点击"运行评估"后展示朴素 RAG 与重排 RAG 的指标对比。</div>
+          <div v-else>
+            <div ref="chartEl" class="chart"></div>
+            <table style="margin-top:14px; font-size:12px;">
+              <tr><th>配置</th><th>命中率</th><th>MRR</th><th>上下文精度</th><th>ROUGE-L</th><th>忠实度</th><th>检索ms</th></tr>
+              <tr>
+                <td>朴素 RAG</td>
+                <td>{{ (evalData.naive.hit_rate*100).toFixed(1) }}%</td>
+                <td>{{ evalData.naive.mrr.toFixed(3) }}</td>
+                <td>{{ evalData.naive.context_precision.toFixed(3) }}</td>
+                <td>{{ evalData.naive.rouge_l.toFixed(4) }}</td>
+                <td>{{ evalData.naive.faithfulness.toFixed(4) }}</td>
+                <td>{{ evalData.naive.avg_retrieval_ms }}</td>
+              </tr>
+              <tr>
+                <td>重排 RAG</td>
+                <td>{{ (evalData.advanced.hit_rate*100).toFixed(1) }}%</td>
+                <td>{{ evalData.advanced.mrr.toFixed(3) }}</td>
+                <td>{{ evalData.advanced.context_precision.toFixed(3) }}</td>
+                <td>{{ evalData.advanced.rouge_l.toFixed(4) }}</td>
+                <td>{{ evalData.advanced.faithfulness.toFixed(4) }}</td>
+                <td>{{ evalData.advanced.avg_retrieval_ms }}</td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:22px;">
+          <h2>评测集逐题结果（重排 RAG）</h2>
+          <div v-if="!evalData" style="color:var(--muted);font-size:13px;">运行评估后展示逐题命中与排名情况。</div>
+          <table v-else style="font-size:12px;">
+            <tr><th>#</th><th>问题</th><th>命中</th><th>MRR</th><th>上下文精度</th><th>ROUGE-L</th></tr>
+            <tr v-for="d in evalData.details" :key="d.id">
+              <td>{{ d.id }}</td>
+              <td class="q">{{ d.question }}</td>
+              <td><span class="pill" :class="d.hit?'ok':'no'">{{ d.hit?'✓':'✗' }}</span></td>
+              <td>{{ d.mrr.toFixed(2) }}</td>
+              <td>{{ d.context_precision.toFixed(2) }}</td>
+              <td>{{ d.rouge_l.toFixed(3) }}</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="card" style="margin-top:22px;">
+          <h2>知识库文档</h2>
+          <div class="kb-list">
+            <div class="kb-item" v-for="d in kb" :key="d.id">
+              <b>{{ d.id }}</b> · {{ d.title }}<br/>
+              <span style="color:var(--muted)">{{ d.source }} · {{ d.len }} 字</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer>RAG 教务问答系统 · 数据科学前沿课程报告配套实验 · 仅用于教学演示</footer>
+  </div>
+
+  <script>
+    const { createApp, ref, nextTick } = Vue;
+    createApp({
+      setup() {
+        const question = ref('转专业一般在什么时间进行？有哪些情况不予转专业？');
+        const rerank = ref(true);
+        const loading = ref(false);
+        const answer = ref('');
+        const backend = ref('');
+        const latency = ref(0);
+        const sourceIds = ref([]);
+        const retrieved = ref([]);
+        const error = ref('');
+        const evalData = ref(null);
+        const kb = ref([]);
+        const chartEl = ref(null);
+        let chart = null;
+
+        const samples = [
+          '绩点如何计算？',
+          '毕业和结业有什么区别？',
+          '学业预警分几级？',
+          '考试作弊怎么处理？',
+          '休学最长多久？',
+        ];
+
+        async function doAsk() {
+          if (!question.value.trim()) return;
+          loading.value = true; error.value = ''; answer.value = '';
+          try {
+            const r = await fetch('/api/ask', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ question: question.value, rerank: rerank.value })
+            });
+            const j = await r.json();
+            if (j.error) { error.value = j.error; }
+            else {
+              answer.value = j.answer; backend.value = j.backend;
+              latency.value = j.latency_ms; sourceIds.value = j.source_ids;
+              retrieved.value = j.retrieved || [];
+            }
+          } catch(e) { error.value = String(e); }
+          loading.value = false;
+        }
+
+        async function runEval() {
+          loading.value = true; error.value = '';
+          try {
+            const r = await fetch('/api/eval', {
+              method:'POST', headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ rerank: rerank.value })
+            });
+            const j = await r.json();
+            if (j.error) { error.value = j.error; }
+            else { evalData.value = j; await nextTick(); renderChart(); }
+          } catch(e) { error.value = String(e); }
+          loading.value = false;
+        }
+
+        async function loadKb() {
+          try {
+            const r = await fetch('/api/kb'); kb.value = await r.json();
+          } catch(e) {}
+        }
+
+        function renderChart() {
+          if (!chartEl.value) return;
+          if (chart) chart.dispose();
+          chart = echarts.init(chartEl.value);
+          const a = evalData.value.advanced, n = evalData.value.naive;
+          chart.setOption({
+            title: { text: '朴素 RAG vs 重排 RAG 指标对比', left:'center',
+              textStyle:{ color:'#128c5e', fontSize:15 } },
+            tooltip: { trigger: 'axis', axisPointer:{type:'shadow'} },
+            legend: { data:['朴素 RAG','重排 RAG'], bottom: 0 },
+            grid: { left:'8%', right:'6%', top:'22%', bottom:'15%' },
+            xAxis: { type:'category', data:['命中率','MRR','上下文精度','ROUGE-L','忠实度'],
+              axisLabel:{ color:'#5d7d6c' } },
+            yAxis: { type:'value', max:1, axisLabel:{ color:'#5d7d6c', formatter:v=>(v*100)+'%' } },
+            series: [
+              { name:'朴素 RAG', type:'bar', data:[n.hit_rate,n.mrr,n.context_precision,n.rouge_l,n.faithfulness],
+                itemStyle:{ color:'#8fd3b6' } },
+              { name:'重排 RAG', type:'bar', data:[a.hit_rate,a.mrr,a.context_precision,a.rouge_l,a.faithfulness],
+                itemStyle:{ color:'#2bb673' } },
+            ]
+          });
+        }
+
+        loadKb();
+        return { question, rerank, loading, answer, backend, latency, sourceIds,
+                 retrieved, error, evalData, kb, chartEl, samples, doAsk, runEval, loadKb };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
